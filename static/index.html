@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debunk & Bet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans selection:bg-purple-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="py-6 border-b border-gray-800">
+        <div class="max-w-4xl mx-auto px-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">
+                Debunk & Bet
+            </h1>
+            <span class="text-sm text-gray-400 bg-gray-800 py-1 px-3 rounded-full border border-gray-700">Polymarket Fact-Checker</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 py-12">
+        
+        <!-- Input Section -->
+        <div class="mb-12 text-center">
+            <h2 class="text-4xl font-extrabold mb-4">Leverage AI to Assess Predictions</h2>
+            <p class="text-gray-400 mb-8 max-w-2xl mx-auto">Paste a Polymarket event URL below. We will gather live context and query the OpenGradient LLM to provide you with an objective verdict.</p>
+            
+            <form id="analyze-form" class="relative max-w-2xl mx-auto flex items-center">
+                <input 
+                    type="url" 
+                    id="market-url" 
+                    placeholder="https://polymarket.com/event/..." 
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg py-4 pl-4 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    class="absolute right-2 top-2 bottom-2 bg-purple-600 hover:bg-purple-700 text-white font-medium px-6 rounded-md transition-colors disabled:opacity-50"
+                    id="submit-btn"
+                >
+                    Debunk
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingIndicator" class="hidden flex-col items-center justify-center py-12">
+            <div class="w-12 h-12 border-4 border-gray-700 border-t-purple-500 rounded-full animate-spin mb-6"></div>
+            <p id="loadingText" class="text-lg text-gray-300 font-medium animate-pulse">Initializing request...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="hidden glass-panel rounded-xl p-8 shadow-2xl transition-all">
+            
+            <div class="mb-8 pb-6 border-b border-gray-700/50">
+                <h3 id="res-question" class="text-2xl font-bold leading-tight mb-2"></h3>
+                <div class="flex flex-wrap gap-4 mt-4" id="res-odds-container">
+                    <!-- Odds badges injected here -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                <!-- Verdict Box -->
+                <div id="verdict-box" class="col-span-1 rounded-xl p-6 flex flex-col items-center justify-center text-center border">
+                    <span class="text-gray-400 text-sm uppercase tracking-wider font-semibold mb-2">AI Verdict</span>
+                    <span id="res-verdict" class="text-4xl font-extrabold pb-2"></span>
+                </div>
+                
+                <!-- Reasoning Box -->
+                <div class="col-span-1 md:col-span-2 space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-200">Analysis Reasoning</h4>
+                    <p id="res-reasoning" class="text-gray-400 leading-relaxed"></p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-gray-700/50">
+                <!-- Sources -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Context Sources</h4>
+                    <ul id="res-sources" class="space-y-2 text-sm">
+                        <!-- Source links injected here -->
+                    </ul>
+                </div>
+                
+                <!-- Verification Link -->
+                <div>
+                     <h4 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Blockchain Proof</h4>
+                     <a id="res-proof" href="#" target="_blank" class="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-blue-400 py-2 px-4 rounded-lg border border-gray-700 transition-colors">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span class="font-medium text-sm">Verified by OpenGradient</span>
+                     </a>
+                </div>
+            </div>
+            
+        </div>
+
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
