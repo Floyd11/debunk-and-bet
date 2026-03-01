@@ -81,8 +81,9 @@ def analyze_with_llm(question: str, rules: str, odds: Dict[str, float], context:
              
              # Validate verdict
              if verdict not in ["Yes", "No", "Uncertain"]:
+                  original_verdict = verdict
                   verdict = "Uncertain"
-                  reasoning += f" (Note: Original verdict was {verdict})"
+                  reasoning += f" (Note: Original verdict was {original_verdict})"
                   
              return verdict, reasoning, tx_hash
         except json.JSONDecodeError:
