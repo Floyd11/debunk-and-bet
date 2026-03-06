@@ -5,23 +5,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadingIndicator = document.getElementById('loadingIndicator');
     const loadingText = document.getElementById('loadingText');
-    const resultsDiv = document.getElementById('results');
+    const verdictContainer = document.getElementById('verdict-container');
+    const detailedContainer = document.getElementById('detailed-analysis-container');
+    const disclaimerText = document.getElementById('disclaimer-text');
+    const errorContainer = document.getElementById('error-container');
+    const errorText = document.getElementById('error-text');
 
+    // Verdict nodes
     const resQuestion = document.getElementById('res-question');
-    const resOddsContainer = document.getElementById('res-odds-container');
-    const resVerdictBox = document.getElementById('verdict-box');
+    const resVerdictBox = document.getElementById('res-verdict-box');
     const resVerdict = document.getElementById('res-verdict');
-    const resReasoning = document.getElementById('res-reasoning');
+    const resVerdictDivider = document.getElementById('res-verdict-divider');
+    const resAiProb = document.getElementById('res-ai-prob');
+    const resMarketProb = document.getElementById('res-market-prob');
+    const resEdge = document.getElementById('res-edge');
+    const resSynthesisMain = document.getElementById('res-synthesis-main');
+
+    // Detailed nodes
+    const resBaseRate = document.getElementById('res-base-rate');
+    const resProYes = document.getElementById('res-pro-yes');
+    const resProNo = document.getElementById('res-pro-no');
+    const resInfoGap = document.getElementById('res-info-gap');
+    const resSynthesisFull = document.getElementById('res-synthesis-full');
     const resSources = document.getElementById('res-sources');
     const resProof = document.getElementById('res-proof');
 
+    // Toggler
+    const toggleDetailedBtn = document.getElementById('toggle-detailed-btn');
+    const toggleDetailedText = document.getElementById('toggle-detailed-text');
+    const toggleDetailedIcon = document.getElementById('toggle-detailed-icon');
+
     const loadingStages = [
         "Fetching market rules and odds from Polymarket...",
-        "Gathering fresh news context from Google & X...",
+        "Rewriting query for optimal research...",
+        "Gathering fresh news context from trusted sources...",
         "Sending encrypted payload to OpenGradient TEE...",
-        "Waiting for AI Verdict...",
-        "Finalizing reasoning..."
+        "Waiting for AI Analysis...",
+        "Calculating Edge..."
     ];
+
+    // Accordions Toggle Event Logic structure natively handled by <details> tag in HTML5
+    // But we need to handle the "Detailed Analysis" hidden state
+    toggleDetailedBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isHidden = detailedContainer.classList.contains('hidden');
+        if (isHidden) {
+            detailedContainer.classList.remove('hidden');
+            toggleDetailedText.textContent = "Hide Detailed Analysis";
+            toggleDetailedIcon.textContent = "arrow_upward";
+        } else {
+            detailedContainer.classList.add('hidden');
+            toggleDetailedText.textContent = "View Detailed Analysis";
+            toggleDetailedIcon.textContent = "arrow_downward";
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -29,11 +66,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!url) return;
 
-        // Reset UI
-        resultsDiv.classList.add('hidden');
+        // Reset UI to Loading State
+        verdictContainer.classList.add('hidden');
+        detailedContainer.classList.add('hidden');
+        disclaimerText.classList.add('hidden');
+        errorContainer.classList.add('hidden');
+        errorText.textContent = '';
+
+        // Reset toggle to default
+        toggleDetailedText.textContent = "View Detailed Analysis";
+        toggleDetailedIcon.textContent = "arrow_downward";
+
         loadingIndicator.classList.remove('hidden');
         loadingIndicator.classList.add('flex');
+
         submitBtn.disabled = true;
+        input.disabled = true;
+        const orgBtnText = submitBtn.textContent;
+        submitBtn.textContent = "Analyzing...";
 
         // Fun loading text loop
         let stage = 0;
@@ -59,75 +109,103 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
 
-            // Populate Results
+            // Note: `hidden_thought_process` exists in the payload but is intentionally ignored
+
+            // State 3: Populate and Show Verdict
             resQuestion.textContent = data.market_question;
 
-            // Odds
-            resOddsContainer.innerHTML = '';
-            for (const [outcome, price] of Object.entries(data.current_odds)) {
-                const percentage = (price * 100).toFixed(1) + "%";
-                resOddsContainer.innerHTML += `
-                    <div class="px-4 py-2 bg-gray-800 rounded-lg border border-gray-700">
-                        <span class="text-sm text-gray-400 mr-2">${outcome}:</span>
-                        <span class="font-bold text-white">${percentage}</span>
-                    </div>
-                `;
-            }
+            // Base styling reset for the verdict box
+            resVerdictBox.className = "w-full md:w-1/3 flex flex-col items-center justify-center p-8 rounded-xl border-2";
+            resVerdictDivider.className = "w-full space-y-3 pt-6 border-t";
+            resVerdict.className = "text-6xl font-black mb-6";
+            resEdge.className = "font-bold";
 
-            // Verdict Styling
-            resVerdict.textContent = data.ai_verdict;
-            resVerdictBox.className = "col-span-1 border rounded-xl p-6 flex flex-col items-center justify-center text-center";
+            resVerdict.textContent = data.recommended_bet;
+            resAiProb.textContent = `${data.ai_event_probability}%`;
+            resMarketProb.textContent = `${data.market_probability}%`;
+            resEdge.textContent = `${data.edge}%`;
 
-            if (data.ai_verdict === "Yes") {
-                resVerdictBox.classList.add("bg-green-900/20", "border-green-500/50");
-                resVerdict.classList.add("text-green-400");
-            } else if (data.ai_verdict === "No") {
-                resVerdictBox.classList.add("bg-red-900/20", "border-red-500/50");
-                resVerdict.classList.add("text-red-400");
+            if (data.recommended_bet === "YES") {
+                resVerdictBox.classList.add("bg-[#162e24]", "border-[#162e24]");
+                resVerdict.classList.add("text-[#22c55e]");
+                resVerdictDivider.classList.add("border-[#22c55e]/20");
+                resEdge.classList.add("text-[#22c55e]");
+            } else if (data.recommended_bet === "NO") {
+                resVerdictBox.classList.add("bg-[#4c1d24]", "border-[#4c1d24]");
+                resVerdict.classList.add("text-[#ef4444]");
+                resVerdictDivider.classList.add("border-[#ef4444]/20");
+                resEdge.classList.add("text-[#ef4444]");
             } else {
-                resVerdictBox.classList.add("bg-gray-800/50", "border-gray-600");
-                resVerdict.classList.add("text-gray-300");
+                resVerdictBox.classList.add("bg-slate-800", "border-slate-700");
+                resVerdict.classList.add("text-white");
+                resVerdictDivider.classList.add("border-slate-600/50");
+                resEdge.classList.add("text-[#a855f7]");
             }
 
-            // Reasoning
-            resReasoning.textContent = data.reasoning;
+            // Text content
+            resSynthesisMain.textContent = data.synthesis || "No synthesis available.";
+
+            // Detailed Analysis population
+            resBaseRate.textContent = data.base_rate_analysis || "No base rate provided.";
+
+            resProYes.innerHTML = '';
+            if (data.pro_yes_arguments && data.pro_yes_arguments.length > 0) {
+                data.pro_yes_arguments.forEach(arg => { resProYes.innerHTML += `<li>${arg}</li>`; });
+            } else { resProYes.innerHTML = '<li>None identified.</li>'; }
+
+            resProNo.innerHTML = '';
+            if (data.pro_no_arguments && data.pro_no_arguments.length > 0) {
+                data.pro_no_arguments.forEach(arg => { resProNo.innerHTML += `<li>${arg}</li>`; });
+            } else { resProNo.innerHTML = '<li>None identified.</li>'; }
+
+            resInfoGap.textContent = data.information_gap || "None identified.";
+            resSynthesisFull.textContent = data.synthesis || "No synthesis available.";
 
             // Sources
             resSources.innerHTML = '';
-            if (data.sources && data.sources.length > 0) {
-                data.sources.forEach(src => {
-                    // Try to make a clean domain name
+            if (data.context_sources && data.context_sources.length > 0) {
+                data.context_sources.forEach(src => {
                     let domain = src;
                     try {
                         domain = new URL(src).hostname.replace('www.', '');
                     } catch (e) { }
 
                     resSources.innerHTML += `
-                        <li>
-                            <a href="${src}" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                                ${domain}
-                            </a>
-                        </li>
+                        <a href="${src}" target="_blank" class="hover:text-white transition-colors underline decoration-slate-600 underline-offset-2">
+                            ${domain}
+                        </a>
                     `;
                 });
             } else {
-                resSources.innerHTML = '<li class="text-gray-500">No external sources cited.</li>';
+                resSources.innerHTML = '<span class="text-slate-500">No external sources cited.</span>';
             }
 
-            // Proof
-            resProof.href = data.verification_proof;
+            // TX Proof link
+            if (data.verification_proof) {
+                resProof.href = data.verification_proof;
+                resProof.style.display = "inline-block";
+                const shortTx = data.verification_proof.split('/').pop();
+                resProof.title = shortTx;
+                resProof.textContent = "View Tx";
+            } else {
+                resProof.style.display = "none";
+            }
 
-            // Show results
-            resultsDiv.classList.remove('hidden');
+            verdictContainer.classList.remove('hidden');
+            disclaimerText.classList.remove('hidden');
 
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            verdictContainer.classList.add('hidden');
+            detailedContainer.classList.add('hidden');
+            errorText.textContent = error.message.replace('Error: ', '');
+            errorContainer.classList.remove('hidden');
         } finally {
             clearInterval(loadingInterval);
             loadingIndicator.classList.add('hidden');
             loadingIndicator.classList.remove('flex');
             submitBtn.disabled = false;
+            input.disabled = false;
+            submitBtn.textContent = orgBtnText;
         }
     });
 });

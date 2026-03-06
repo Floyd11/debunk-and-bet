@@ -29,10 +29,12 @@ async def get_market_data(url: str) -> Tuple[str, str, Dict[str, float]]:
         resolution_rules = event.get("description", "No rules provided.")
         
         # Determine odds from tokens and markets
-        # Assuming binary market for simplicity (Yes/No)
         markets = event.get("markets", [])
         if not markets:
             raise ValueError("No markets found for this event.")
+            
+        if len(markets) > 1:
+            raise ValueError("Oops! We are currently in Beta and only support single Binary (YES/NO) markets. Categorical markets are in active development. Please try a standard YES/NO event URL.")
             
         main_market = markets[0]
         import json
@@ -45,6 +47,15 @@ async def get_market_data(url: str) -> Tuple[str, str, Dict[str, float]]:
              prices = json.loads(raw_prices) if isinstance(raw_prices, str) else raw_prices
         except json.JSONDecodeError:
              outcomes, prices = [], []
+
+        if not outcomes:
+            raise ValueError("No outcomes found for this event.")
+
+        # Ensure market is strictly YES/NO binary
+        outcome_labels = {str(o).strip().lower() for o in outcomes}
+        if outcome_labels != {"yes", "no"}:
+            raise ValueError("Oops! We are currently in Beta and only support Binary (YES/NO) markets. Categorical markets (like 'Who will win...') are in active development. Please try a YES/NO event URL.")
+
         
         odds = {}
         for i, outcome in enumerate(outcomes):

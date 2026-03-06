@@ -5,7 +5,7 @@ import os
 from .models import AnalyzeRequest, AnalyzeResponse
 from .services.polymarket import get_market_data
 from .services.search import get_news_context
-from .services.opengradient_client import analyze_with_llm
+from .services.opengradient_client import analyze_with_llm, rewrite_query_with_llm
 
 app = FastAPI(title="Debunk & Bet API")
 
@@ -28,27 +28,53 @@ async def analyze_market(req: AnalyzeRequest):
         try:
              question, rules, odds = await get_market_data(req.url)
         except Exception as e:
-             raise HTTPException(status_code=400, detail=f"Polymarket Error: {str(e)}")
+             # Just pass the error string directly so custom messages show up cleanly
+             raise HTTPException(status_code=400, detail=str(e))
         
-        # Step 2: Fetch Context from Search (DuckDuckGo)
-        context, sources = get_news_context(question)
+        # Step 2: Rewrite Query
+        queries = rewrite_query_with_llm(question)
+             
+        # Step 3: Fetch Context from Search (DuckDuckGo) using multiple queries
+        context, sources = get_news_context(queries)
         
-        # Step 3: Analyze with OpenGradient LLM
+        # Step 4: Analyze with OpenGradient LLM
         try:
-             verdict, reasoning, proof_hash = analyze_with_llm(question, rules, odds, context)
+             analysis_result = analyze_with_llm(question, rules, odds, context)
+             true_probability_yes = analysis_result.get("true_probability_yes", 50)
+             wallet_address = analysis_result.get("wallet_address", "0xERROR")
         except Exception as e:
              raise HTTPException(status_code=500, detail=f"OpenGradient LLM Error: {str(e)}")
              
-        # Format OpenGradient Explorer link based on hash
-        explorer_link = f"https://explorer.opengradient.network/tx/{proof_hash}" if proof_hash and proof_hash != "0xERROR" else "#"
+        # Format OpenGradient Explorer link to point to user's wallet token transactions
+        explorer_link = f"https://sepolia.basescan.org/address/{wallet_address}#tokentxns" if wallet_address and wallet_address != "0xERROR" else "#"
 
-        # Step 4: Return formatted JSON
+        # Step 5: Backend Decision Logic
+        # Assuming binary market, YES is usually the first key or 'Yes' key.
+        market_prob_yes_float = odds.get('Yes', list(odds.values())[0] if odds else 0.5)
+        market_prob_yes = int(market_prob_yes_float * 100)
+        
+        if true_probability_yes > market_prob_yes:
+            recommended_bet = "YES"
+        elif true_probability_yes < market_prob_yes:
+            recommended_bet = "NO"
+        else:
+            recommended_bet = "SKIP"
+            
+        edge = abs(true_probability_yes - market_prob_yes)
+
+        # Step 6: Return formatted JSON
         return AnalyzeResponse(
             market_question=question,
-            current_odds=odds,
-            ai_verdict=verdict,
-            reasoning=reasoning,
-            sources=sources,
+            recommended_bet=recommended_bet,
+            ai_event_probability=true_probability_yes,
+            market_probability=market_prob_yes,
+            edge=edge,
+            base_rate_analysis=analysis_result.get("base_rate_analysis", ""),
+            pro_yes_arguments=analysis_result.get("pro_yes_arguments", []),
+            pro_no_arguments=analysis_result.get("pro_no_arguments", []),
+            information_gap=analysis_result.get("information_gap", ""),
+            synthesis=analysis_result.get("synthesis", ""),
+            context_sources=list(sources), # convert set back to list
             verification_proof=explorer_link
         )
 
@@ -56,3 +82,4 @@ async def analyze_market(req: AnalyzeRequest):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
