@@ -6,7 +6,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_news_context(queries: List[str]) -> Tuple[str, set]:
+OFFICIAL_DOMAINS = {
+    "microstrategy": ["strategy.com", "sec.gov", "coindesk.com", "bloomberg.com"],
+    "default": ["reuters.com", "bloomberg.com", "coindesk.com", "ap.org"]
+}
+
+def get_news_context(queries: List[str], include_domains: List[str] = None) -> Tuple[str, set]:
     """
     Fetches context from Tavily using multiple targeted queries.
     Enforces a 3-tier time bucket strategy.
@@ -23,9 +28,9 @@ def get_news_context(queries: List[str]) -> Tuple[str, set]:
     tavily_client = TavilyClient(api_key=api_key)
 
     tiers = {
-        "d": {"header": "[🔴 URGENT: LAST 24 HOURS]", "days": 1, "max_results": 3, "items": []},
-        "w": {"header": "[🟡 RECENT: LAST 7 DAYS]", "days": 7, "max_results": 3, "items": []},
-        "m": {"header": "[🔵 BACKGROUND: LAST 30 DAYS]", "days": 30, "max_results": 4, "items": []},
+        "d": {"header": "[🔴 URGENT: LAST 24 HOURS]", "days": 1, "max_results": 4, "items": []},
+        "w": {"header": "[🟡 RECENT: LAST 7 DAYS]", "days": 7, "max_results": 4, "items": []},
+        "m": {"header": "[🔵 BACKGROUND: LAST 14 DAYS]", "days": 14, "max_results": 2, "items": []},
     }
 
     try:
@@ -37,13 +42,18 @@ def get_news_context(queries: List[str]) -> Tuple[str, set]:
             for tier_key in ["d", "w", "m"]:
                 tier_info = tiers[tier_key]
                 try:
-                    response = tavily_client.search(
-                        query=query,
-                        days=tier_info["days"],
-                        max_results=tier_info["max_results"],
-                        search_depth="advanced",
-                        include_raw_content=False
-                    )
+                    search_params = {
+                        "query": query,
+                        "days": tier_info["days"],
+                        "max_results": tier_info["max_results"],
+                        "search_depth": "advanced",
+                        "include_raw_content": False
+                    }
+                    
+                    if tier_key == "d" and include_domains:
+                        search_params["include_domains"] = include_domains
+                        
+                    response = tavily_client.search(**search_params)
                     
                     if response and "results" in response:
                         for result in response["results"]:

@@ -103,8 +103,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || "Server error occurred.");
+                // Handle non-JSON responses (e.g. 504 Gateway Timeout HTML)
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || "Server error occurred.");
+                } else {
+                    const errText = await response.text();
+                    console.error("Non-JSON Server Error:", errText);
+                    if (response.status === 504) {
+                        throw new Error("Analysis took too long (Gateway Timeout). Please try again.");
+                    }
+                    throw new Error(`Server returned status ${response.status}.`);
+                }
             }
 
             const data = await response.json();

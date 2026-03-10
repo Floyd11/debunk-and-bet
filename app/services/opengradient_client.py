@@ -19,12 +19,17 @@ def rewrite_query_with_llm(question: str) -> list[str]:
     client = og.init(private_key=PRIVATE_KEY)
     
     system_prompt = (
-        "You are an expert intelligence gatherer. Convert the given prediction market question into exactly 2 or 3 highly targeted English-language search queries to find the most recent and authoritative news on the topic. "
-        "Do NOT include site: operators here. Focus only on keywords. "
-        "Return the output STRICTLY as a raw JSON list of strings. Do NOT wrap it in markdown blockquotes."
+        "You are an expert intelligence gatherer. Convert the given prediction market question into exactly 3 highly targeted English-language search queries. "
+        "RULES: "
+        "1. Query 1: Official/primary source query. For corporate events use company name + official action + year. Example: 'MicroStrategy Bitcoin purchase announcement March 2026 strategy.com' "
+        "2. Query 2: News aggregator query. Use major news outlets keywords. Example: 'MicroStrategy MSTR Bitcoin buy 2026 site:coindesk.com OR site:bloomberg.com' "
+        "3. Query 3: Broad recent news query with current year. "
+        "CRITICAL: Always include the current year in ALL queries. "
+        "Return the output STRICTLY as a raw JSON list of 3 strings, nothing else."
     )
     
-    user_prompt = f"Question: {question}"
+    current_year = datetime.now().year
+    user_prompt = f"Current Year: {current_year}\nQuestion: {question}"
     
     try:
         response = client.llm.chat(
@@ -77,9 +82,12 @@ def analyze_with_llm(question: str, rules: str, odds: Dict[str, float], context:
 
     system_prompt = "You are a highly advanced Superforecaster AI."
 
+    current_date = datetime.now().strftime("%B %d, %Y")
+
     user_prompt = f"""
 You are an expert superforecaster, known for your high accuracy, emotional detachment, and excellent calibration (similar to Philip Tetlock's superforecasters).
 Your task is to estimate the true probability (0-100%) that the following Polymarket event will resolve as "YES".
+CRITICAL TEMPORAL ANCHOR: Today's date is {current_date}. All news context provided must be evaluated relative to this exact date. Any events in the news that supposedly happened in the future (after {current_date}) are likely reporting errors or misinterpretations of historical data and should be heavily scrutinized or discarded.
 
 Event Details:
 Title: {question}
@@ -200,54 +208,3 @@ Return your response STRICTLY as a raw JSON object. Use this exact schema:
             "synthesis": "Connection error.",
             "wallet_address": "0xERROR"
         }
-
-def rewrite_query_with_llm(question: str) -> list[str]:
-    """
-    Uses OpenGradient LLM to convert a Polymarket question into 2-3 targeted English search queries.
-    """
-    if not PRIVATE_KEY:
-        raise ValueError("OPENGRADIENT_PRIVATE_KEY is not set.")
-        
-    client = og.init(private_key=PRIVATE_KEY)
-    
-    system_prompt = (
-        "You are an expert intelligence gatherer. Convert the given prediction market question into exactly 2 or 3 highly targeted English-language search queries to find the most recent and authoritative news on the topic. "
-        "Do NOT include site: operators here. Focus only on keywords. "
-        "Return the output STRICTLY as a raw JSON list of strings. Do NOT wrap it in markdown blockquotes."
-    )
-    
-    user_prompt = f"Question: {question}"
-    
-    try:
-        response = client.llm.chat(
-            model=og.TEE_LLM.CLAUDE_SONNET_4_5,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=300
-        )
-        
-        answer = response.chat_output
-        if isinstance(answer, dict) and "content" in answer:
-            answer = answer["content"]
-            
-        if isinstance(answer, str):
-            if "```json" in answer:
-                 answer = answer.split("```json")[1].split("```")[0].strip()
-            elif "```" in answer:
-                 answer = answer.split("```")[1].split("```")[0].strip()
-            queries = json.loads(answer)
-        elif isinstance(answer, list):
-            queries = answer
-        else:
-            queries = [question]
-            
-        if not isinstance(queries, list) or len(queries) == 0:
-            queries = [question]
-            
-        return [str(q) for q in queries][:3]
-    except Exception as e:
-        print(f"Error rewriting query: {e}")
-        return [question]
