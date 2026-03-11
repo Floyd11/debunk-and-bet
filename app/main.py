@@ -13,6 +13,14 @@ from .services.polymarket import get_market_data
 
 from .services.search import get_news_context
 from .services.opengradient_client import rewrite_query_with_llm
+from .services.polymarket_context import get_polymarket_market_context
+
+import hashlib
+import json
+import redis
+from datetime import date
+
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # --- Edge Protocol Modules ---
 from research.binary_agent import get_binary_research
@@ -39,6 +47,15 @@ async def analyze_market(req: AnalyzeRequest):
     Main endpoint for analyzing a Polymarket prediction using Edge Protocol modules via OpenGradient TEE.
     """
     try:
+        # Cache check
+        cache_key = f"analysis:{hashlib.md5(req.url.encode()).hexdigest()}:{date.today()}"
+        try:
+            cached = redis_client.get(cache_key)
+            if cached:
+                return AnalyzeResponse(**json.loads(cached))
+        except Exception:
+            pass  # Redis is unavailable, continue without cache
+
         # Step 1: Fetch Polymarket Data
         try:
              question, rules, odds = await get_market_data(req.url)
@@ -56,8 +73,12 @@ async def analyze_market(req: AnalyzeRequest):
         else:
             include_domains = ["reuters.com", "bloomberg.com", "apnews.com", "bbc.com"]
             
-        context, sources = get_news_context(queries, include_domains=include_domains)
-             
+        context, sources = await get_news_context(queries, include_domains=include_domains)
+        
+        # Enrich context with live Polymarket data
+        slug = req.url.rstrip('/').split('/')[-1]
+        polymarket_live = await get_polymarket_market_context(slug)
+        context = context + polymarket_live
         # Step 2: Run Research Agents concurrently via TEE
         try:
             yes_res, no_res = await asyncio.gather(
@@ -127,7 +148,7 @@ async def analyze_market(req: AnalyzeRequest):
             base_rate_text += f"However, due to {reason_str}, the Kelly criterion does not recommend allocating more than a minimal fraction (0.0%) of your bankroll to this bet."
 
         # Step 8: Return formatted JSON
-        return AnalyzeResponse(
+        response = AnalyzeResponse(
             market_question=question,
             recommended_bet=recommended_bet,
             ai_event_probability=ai_prob_int,
@@ -141,6 +162,14 @@ async def analyze_market(req: AnalyzeRequest):
             context_sources=list(sources) + [yes_res.base_rate_source, no_res.base_rate_source],
             verification_proof=explorer_link # OpenGradient Trace
         )
+        
+        # Save to cache
+        try:
+            redis_client.setex(cache_key, 1800, json.dumps(response.model_dump()))
+        except Exception:
+            pass  # Redis is unavailable, continue without cache
+            
+        return response
 
     except HTTPException as he:
         raise he
