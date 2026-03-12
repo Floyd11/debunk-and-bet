@@ -90,3 +90,53 @@ async def get_news_context(queries: List[str], include_domains: List[str] = None
         context_parts.append("[No relevant search results found]")
         
     return "\n\n".join(context_parts), sources
+
+from .gdelt import get_gdelt_context
+from .reddit_client import get_reddit_context
+from .sec_edgar import get_sec_context
+from .yfinance_client import get_yfinance_context
+
+SOURCE_MAP = {
+    "crypto":      ["gdelt", "reddit"],
+    "geopolitics": ["gdelt", "reddit"],
+    "corporate":   ["sec", "yfinance"],
+    "macro":       ["yfinance", "gdelt"],
+    "other":       ["gdelt"],
+}
+
+async def get_enriched_context(question: str, category: str, tavily_context: str) -> str:
+    """
+    Runs all category-appropriate sources in parallel.
+    Appends results to existing Tavily context.
+    Any source that fails returns "" and is silently skipped.
+    """
+    sources = SOURCE_MAP.get(category, ["gdelt"])
+    tasks = []
+
+    loop = asyncio.get_running_loop()
+
+    if "gdelt" in sources:
+        tasks.append(get_gdelt_context(question))
+
+    if "reddit" in sources:
+        tasks.append(loop.run_in_executor(_executor, get_reddit_context, question, category))
+
+    if "sec" in sources:
+        tasks.append(get_sec_context(question))
+
+    if "yfinance" in sources:
+        tasks.append(loop.run_in_executor(_executor, get_yfinance_context, question, category))
+
+    # return_exceptions=True — single source failure never crashes the gather
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    extra_context = []
+    for result in results:
+        # Exception objects are silently dropped here — correct pattern
+        if isinstance(result, str) and result.strip():
+            extra_context.append(result)
+
+    if not extra_context:
+        return tavily_context
+
+    return tavily_context + "\n\n" + "\n\n".join(extra_context)

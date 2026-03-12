@@ -7,11 +7,15 @@ from fastapi.responses import HTMLResponse
 import os
 import asyncio
 from typing import Dict, Any
+import uuid
+from contextlib import asynccontextmanager
+from db import get_db_pool, close_db_pool
 
-from .models import AnalyzeRequest, AnalyzeResponse
+from .models import AnalyzeRequest, AnalyzeResponse, StatsResponse
+from system_stats import get_system_stats
 from .services.polymarket import get_market_data
 
-from .services.search import get_news_context
+from .services.search import get_news_context, get_enriched_context
 from .services.opengradient_client import rewrite_query_with_llm
 from .services.polymarket_context import get_polymarket_market_context
 
@@ -30,7 +34,52 @@ from math_engine.binary_lr import compute_final_lr
 from math_engine.binary_bayes import binary_bayesian_update
 from edge.binary_filter import evaluate_binary_edge
 
-app = FastAPI(title="Debunk & Bet API")
+def truncate_context(context: str, max_chars: int = 7000) -> str:
+    if len(context) <= max_chars:
+        return context
+    return context[:max_chars] + "\n[CONTEXT TRUNCATED — additional sources available]"
+
+async def save_prediction_safe(
+    pool, market_url, market_slug, question,
+    category, ai_prob_yes, market_prob_yes,
+    recommended_bet, edge
+):
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO predictions (
+                    id, created_at, market_url, market_slug, question,
+                    category, ai_prob_yes, market_prob_yes, recommended_bet, edge
+                ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)
+                """,
+                str(uuid.uuid4()),
+                market_url, market_slug, question, category,
+                ai_prob_yes, market_prob_yes, recommended_bet, edge
+            )
+    except Exception as e:
+        print(f"[TRACKING ERROR] Failed to save prediction: {e}")
+
+def detect_category(question: str) -> str:
+    q = question.lower()
+    if any(w in q for w in ["bitcoin", "btc", "eth", "crypto", "solana", "blockchain"]):
+        return "crypto"
+    elif any(w in q for w in ["microstrategy", "tesla", "apple", "earnings", "nasdaq", "stock"]):
+        return "corporate"
+    elif any(w in q for w in ["iran", "russia", "war", "election", "president", "nato", "nuclear"]):
+        return "geopolitics"
+    elif any(w in q for w in ["fed", "interest rate", "cpi", "inflation", "gdp"]):
+        return "macro"
+    else:
+        return "other"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await get_db_pool()   # startup
+    yield
+    await close_db_pool() # shutdown
+
+app = FastAPI(title="Debunk & Bet API", lifespan=lifespan)
 
 # Serve static files (Frontend JS/CSS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -40,6 +89,27 @@ async def read_root():
     """Serves the main frontend page"""
     with open("static/index.html", "r") as f:
         return f.read()
+
+@app.get("/stats", response_model=StatsResponse)
+async def get_stats():
+    # Check Redis cache first — avoids heavy aggregation queries on every call
+    try:
+        cached = redis_client.get("stats:overall")
+        if cached:
+            return StatsResponse(**json.loads(cached))
+    except Exception:
+        pass  # Redis unavailable — continue without cache
+
+    pool = await get_db_pool()
+    stats_data = await get_system_stats(pool)
+
+    # Cache result for 5 minutes
+    try:
+        redis_client.setex("stats:overall", 300, json.dumps(stats_data))
+    except Exception:
+        pass  # Cache failure is non-fatal
+
+    return stats_data
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_market(req: AnalyzeRequest):
@@ -77,8 +147,14 @@ async def analyze_market(req: AnalyzeRequest):
         
         # Enrich context with live Polymarket data
         slug = req.url.rstrip('/').split('/')[-1]
+        category = detect_category(question)
         polymarket_live = await get_polymarket_market_context(slug)
         context = context + polymarket_live
+        
+        # Phase 4 Enrichment (Parallel Sources)
+        context = await get_enriched_context(question, category, context)
+        context = truncate_context(context)
+        
         # Step 2: Run Research Agents concurrently via TEE
         try:
             yes_res, no_res = await asyncio.gather(
@@ -148,7 +224,23 @@ async def analyze_market(req: AnalyzeRequest):
             base_rate_text += f"However, due to {reason_str}, the Kelly criterion does not recommend allocating more than a minimal fraction (0.0%) of your bankroll to this bet."
 
         # Step 8: Return formatted JSON
+        category = detect_category(question)
+        pool = await get_db_pool()
+        asyncio.create_task(save_prediction_safe(
+            pool=pool,
+            market_url=req.url,
+            market_slug=slug,
+            question=question,
+            category=category,
+            ai_prob_yes=ai_prob_int,
+            market_prob_yes=market_prob_int,
+            recommended_bet=recommended_bet,
+            edge=edge_int
+        ))
+
         response = AnalyzeResponse(
+            market_id="api",
+            market_slug=slug,
             market_question=question,
             recommended_bet=recommended_bet,
             ai_event_probability=ai_prob_int,
