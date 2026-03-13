@@ -51,17 +51,17 @@ Every analysis generates a **cryptographic proof** and an on-chain transaction h
 Our engine is built on robust Bayesian statistics modified for real-world epistemological uncertainty (v5.2 Binary Markets math). 
 
 ### Asymmetric Likelihood Ratios
-Instead of generating a raw probability, our Judge evaluates the evidence from both agents to produce two distinct Likelihood Ratios ($\text{LR}_{yes}$ and $\text{LR}_{no}$). The final composite Likelihood Ratio is asymmetric:
+Instead of generating a raw probability, our Judge evaluates the evidence from both agents to produce two distinct Likelihood Ratios ($\text{LR}\_{yes}$ and $\text{LR}\_{no}$). The final composite Likelihood Ratio is asymmetric:
 
 $$
-\text{Final\_LR} = \frac{LR_{yes}}{LR_{no}}
+\text{LR}_{final} = \frac{\text{LR}_{yes}}{\text{LR}_{no}}
 $$
 
 ### 1D Bayesian Update in Odds Space
-We map the crowd's current probability to prior odds ($O_{prior}$), and update our belief using the calculated $\text{Final\_LR}$ to find the posterior odds ($O_{post}$):
+We map the crowd's current probability to prior odds ($O\_{prior}$), and update our belief using the calculated $\text{LR}\_{final}$ to find the posterior odds ($O\_{post}$):
 
 $$
-O_{post} = O_{prior} \times \text{Final\_LR}
+O_{post} = O_{prior} \times \text{LR}_{final}
 $$
 
 *From $O_{post}$, we derive our internal true probability.*
