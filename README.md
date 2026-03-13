@@ -28,6 +28,19 @@ Before probability can be established, evidence must be weighed fairly. We utili
 - **Agent YES**: Scours real-time news sources and indices looking exclusively for arguments, data, and context supporting the event's occurrence.
 - **Agent NO**: Operates entirely independently to fetch counter-evidence, establishing a competitive base rate for why the event will *not* occur.
 
+**Context Enrichment & Data Sources:**
+To provide our agents with the most comprehensive data possible, our pipeline orchestrates multiple independent data streams:
+- **Live Market Data:** Integrates directly with the **Polymarket API** for real-time market context and event rules.
+- **Web & News Aggregation:** Leverages **Tavily Search** and the **GDELT Project** for global news and events monitoring.
+- **Financial & Corporate Data:** Incorporates **yfinance** for market data and **SEC EDGAR** for corporate filings.
+- **Social Sentiment:** Connects to the **Reddit API** to gauge crowd psychology and emerging narratives.
+
+**Performance & Reliability (Optimized Pipeline):**
+- **Parallel Execution:** Context gathering is executed concurrently using asynchronous orchestration to strictly adhere to latency requirements.
+- **Redis Caching:** API responses and LLM inferences are intelligently cached via **Redis** to dramatically improve response times and eliminate redundant external calls.
+- **Fail-Fast Mechanics:** The system employs rigid timeout constraints and silent failure principles on network errors to prevent excessive token dilution and guarantee consistent endpoint performance.
+
+
 ### 2. Verifiable Inference (OpenGradient TEE)
 Once the evidence is collected, it is submitted to our "Judge" LLM. To guarantee the Judge operates without interference, all inference runs inside a **Trusted Execution Environment (TEE)** on the Sepolia network via **OpenGradient**. 
 
@@ -57,6 +70,11 @@ $$
 Finding an edge is only half the battle; managing risk is the other. We employ a **modified Kelly Criterion** for bet sizing. 
 
 Crucially, when Agent YES and Agent NO both return extremely strong, yet sharply conflicting evidence, the system detects an **"Informational War."** In these scenarios of high epistemological uncertainty, we apply an **Epistemic Penalty**—mathematically shrinking the recommended bet size (confidence penalty) to protect capital against unknown unknowns.
+
+### Continuous Tracking & Calibration
+Our AI agents don't just make predictions; they learn from them. The protocol features an integrated tracking system that evaluates past performance using empirical scoring methods like the **Brier Score** and calibration curves.
+- **Model Calibration:** By constantly comparing generated probabilities against actual market resolutions, we detect bias and adjust agent weighting. This ensures our internal probabilities remain extremely well-calibrated (e.g., predictions with a 70% confidence historically resolve true precisely 70% of the time).
+- **Consensus vs. Edge Tracking:** The system monitors live markets to track dynamic shifts in crowd consensus against our inferred probabilities, triggering automatic re-evaluations when new, high-impact evidence significantly alters the baseline.
 
 ## ⚙️ Local Setup & Usage
 
